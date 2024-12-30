@@ -1,0 +1,17 @@
+Hostname   |$HOSTNAME
+Logins|Ip
+$(USERS_LOGINS_LIST)
+Uptime|$UPTIME
+Kernel|$UNAME_KERNEL_RELEASE
+Load|$LOADAVG_1_5_15
+Memory|$MEM_USED of $MEM_TOTAL
+Storage    |Use|Avail|Size
+$(MNT_LIST)
+$(FS_LIST)
+Process   |Cpu|Mem
+$(PROCS_LIST)
+Network    |Ipv4|Rx|Tx
+$(NET_LIST)
+Ping       |Host
+$(PING_LIST)
+* ${PING_TIMES[0]}|${PING_HOSTS[0]}

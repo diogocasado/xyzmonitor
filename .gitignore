@@ -1,0 +1,6 @@
+
+# Debian package generation files
+debian/files
+debian/xyzmonitor
+debian/xyzmonitor*.*
+

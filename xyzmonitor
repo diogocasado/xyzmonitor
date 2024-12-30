@@ -1,0 +1,400 @@
+#!/usr/bin/env bash
+
+set -ue
+shopt -s extglob
+
+XYZ_DIRS=(/usr/local/etc/xyzmonitor/xyz.d /etc/xyzmonitor/xyz.d)
+CONF_DIR=/etc/xyzmonitor/conf.d
+
+CALLS=("pre" "set" "print" "write" "post")
+XYZS=()
+XYZENVS=()
+
+V=0 #0: Silent, 1: Info, 2: Debug, 3: Trace
+SILENT=0
+INFO=1
+DEBUG=2
+TRACE=3
+
+HELP=0
+PRINTENV=0
+
+TAB=$'\t'
+NL=$'\n'
+NULL=null
+
+info () {
+	if [[ $V -ge 1 ]]; then
+		if [[ -n ${XYZ_NAME:+x} ]]; then
+			echo "[$XYZ_NAME] $1"
+		else
+			echo "$1"
+		fi
+	fi
+}
+
+debug () {
+	if [[ $V -ge 2 ]]; then
+		if [[ -n ${XYZ_NAME:+x} ]]; then
+			echo "[$XYZ_NAME] $1"
+		else
+			echo "$1"
+		fi
+	fi
+}
+
+trace () {
+	if [[ $V -ge 3 ]]; then
+		if [[ -n ${_XYZ_NAME:+x} ]]; then
+			echo "[$XYZ_NAME] $1"
+		else
+			echo "$1"
+		fi
+	fi
+}
+
+error () {
+	if [[ -n ${_XYZ_NAME:+x} ]]; then
+		>&2 echo "[$XYZ_NAME] $1"
+	else
+		>&2 echo "$1"
+	fi
+	exit 1
+}
+
+xyzcfg () {
+	local _VAR=$1
+	local _DESC=$2
+
+	if [[ $HELP -gt 0 ]]; then
+		echo "$TAB=$_VAR: $_DESC"
+	else
+		XYZENVS+=("$_VAR")
+	fi
+}
+
+xyzenv () {
+	local _VAR=$1
+	local _DESC=$2
+
+	if [[ $HELP -gt 0 ]]; then
+		echo "$TAB$_VAR: $_DESC"
+	else
+		XYZENVS+=("$_VAR")
+	fi
+}
+
+xyzfun () {
+	local _VAR=$1
+	local _DESC=$2
+
+	if [[ $HELP -gt 0 ]]; then
+		echo "$TAB\$$_VAR: $_DESC"
+	else
+		XYZENVS+=(\$"$_VAR")
+	fi
+}
+
+func_exists () {
+	declare -F $1 > /dev/null
+	return $?
+}
+
+escape () {
+	echo "$1" | sed ':a;N;$!ba;s/\n/\\n/g'
+}
+
+trim () {
+	local _V="$1"
+	_V="${_V##*( )}"
+	_V="${_V%%*( )}"
+	printf "%s" "$_V"
+}
+
+unquote () {
+	local _V="$1"
+	local _MATCH_LEFT_QUOTE='^[[:space:]]*"(.*))'
+	if [[ "$_V" =~ $_MATCH_LEFT_QUOTE ]]; then
+		_V="${BASH_REMATCH[1]}"
+	fi
+	local _MATCH_RIGHT_QUOTE='([^"]*)"[[:space:]]*$'
+	if [[ "$_V" =~ $_MATCH_RIGHT_QUOTE ]]; then
+		_V="${BASH_REMATCH[1]}"
+	fi
+	printf "%s" "$_V"
+}
+
+config () {
+	local _CONF_FILE=$1
+
+	trace "config $_CONF_FILE"
+
+	local _LINE
+	local _N=0
+	local _OP
+	local _PARAM
+	local _VALUE
+	local _MULTILINE=0
+	local _IN_VALUE=0
+	while IFS= read -r _LINE; do
+		_N=$(($_N+1))
+
+		if [[ $_IN_VALUE -gt 0 ]]; then
+			_VALUE+="$_LINE"
+
+			debug "value is $_LINE"
+
+			local _MATCH_END_QUOTE='"[[:space:]]*$'
+			if [[ "$_LINE" =~ $_MATCH_END_QUOTE ]]; then
+				_IN_VALUE=0
+			else
+				_VALUE+=$NL
+			fi
+		else
+			local _MATCH_IGNORE='(^[[:space:]]*$)|(^[[:space:]]*#)'
+			if [[ "$_LINE" =~ $_MATCH_IGNORE ]]; then
+				continue
+			fi
+
+			local _MATCH_OP='^([^=:]*)([+=])(.*)$'
+			if [[ ! "$_LINE" =~ $_MATCH_OP ]]; then
+				echo "$_CONF_FILE($_N): Invalid syntax"
+				exit 1
+			fi
+
+			#_PARAM=${_LINE%%[=:]*}
+			_PARAM=${BASH_REMATCH[1]}
+			_PARAM="$(trim "$_PARAM")"
+			debug "Param: $_PARAM"
+
+			_OP=${BASH_REMATCH[2]}
+			debug "Op: $_OP"
+
+			#_VALUE=${_LINE#*[=:]}
+			_VALUE=${BASH_REMATCH[3]}
+			debug "Value: $_VALUE"
+
+			local _MATCH_START_QUOTE_ONLY='^[[:space:]]*"[^"]*$'
+			if [[ "$_VALUE" =~ $_MATCH_START_QUOTE_ONLY ]]; then
+				_MULTILINE=1
+				_IN_VALUE=1
+
+				local _MATCH_SUPPRESS_NL='"[[:space:]]*$'
+				if [[ ! "$_VALUE" =~ $_MATCH_SUPPRESS_NL ]]; then
+					_VALUE+=$NL
+				fi
+			fi
+		fi
+
+		if [[ $_IN_VALUE -eq 0 ]]; then
+			_VALUE="$(unquote "$_VALUE")"
+
+			local _TYPE="$(declare -p "$_PARAM" 2> /dev/null)"
+			if [[ -z ${_TYPE-x} ]]; then
+				echo "$_CONF_FILE($_N): Invalid parameter $_PARAM"
+				exit 1
+			fi
+
+			local -n _VAR="$_PARAM"
+			case "${_TYPE#declare -}" in
+				a*)
+					if [[ "$_OP" == "=" ]]; then
+						debug "Array"
+						if [[ $_MULTILINE -gt 0 ]]; then
+							_VAR=("$_VALUE")
+						else
+							_VAR=()
+							for _ITEM in $_VALUE; do
+								debug "Add $_ITEM"
+								_VAR+=($_ITEM)
+							done
+						fi
+					elif [[ "$_OP" == "+" ]]; then
+						_VAR+=("$_VALUE")
+					else
+						echo "$_CONF_FILE($_N): Invalid operator $_OP"
+					fi
+					;;
+
+				*)
+					if [[ "$_OP" == "=" ]]; then
+						_VAR="$_VALUE"
+					else
+						echo "$_CONF_FILE($_N): Invalid operator $_OP"
+					fi
+					;;
+			esac
+		fi
+
+	done < $_CONF_FILE
+}
+
+load () {
+	XYZ_FILE=$1
+
+	trace "load $XYZ_FILE"
+
+	XYZ_NAME=$(basename $XYZ_FILE .bash)
+	XYZS+=("$XYZ_NAME")
+	source $XYZ_FILE
+
+	if func_exists "${XYZ_NAME}_invoke"; then
+		trace "call invoke init"
+		"${XYZ_NAME}_invoke" "init"
+	fi
+	if func_exists "${XYZ_NAME}_init"; then
+		trace "call init"
+		"${XYZ_NAME}_init"
+	fi
+
+	unset XYZ_NAME
+	unset XYZ_FILE
+}
+
+call () {
+	local _CALL_NAME=$1
+
+	trace "pass $_CALL_NAME"
+
+	if [[ $_CALL_NAME == "printenv" && $PRINTENV -gt 0 ]]; then
+		call_printenv
+		return
+	fi
+
+	for XYZ_NAME in ${XYZS[@]}; do
+		if func_exists "${XYZ_NAME}_invoke"; then
+			trace "call invoke ${_CALL_NAME}"
+			"${XYZ_NAME}_invoke" "$_CALL_NAME"
+		fi
+		local _XYZ_FUNC="${XYZ_NAME}_${_CALL_NAME}"
+		if func_exists $_XYZ_FUNC; then
+			trace "call ${_CALL_NAME}"
+			$_XYZ_FUNC
+		fi
+	done
+
+	unset XYZ_NAME
+}
+
+call_printenv () {
+	local _VAR
+	for _VAR in ${XYZENVS[@]}; do
+		local -n _VALUE="$_VAR"
+		local _TYPE=$(declare -p $_VAR)
+		case "${_TYPE#declare -}" in
+			a*)
+				printf "%s=(" "$_VAR"
+				local _SEP=
+				local _ITEM
+				for _ITEM in "${_VALUE[@]}"; do
+					printf "%s\"%s\"" "$_SEP" "$_ITEM"
+					_SEP=","
+				done
+				printf ")\n"
+				;;
+			*)
+				printf "%s=\"%s\"\n" "$_VAR" "${_VALUE}"
+				;;
+		esac
+	done;
+}
+
+help () {
+	cat <<-EOF
+	Usage:
+	$TAB # xyzmonitor [options]
+
+	xyzmonitor is a simple script to collect stats and send it around.
+	For more info, report bugs or ask for features please use the repository:
+	https://github.com/diogocasado/xyzmonitor
+
+	Options:
+	$TAB-h Outputs this information.
+	$TAB-v Outputs info messages, -vv debug messages, -vvv trace messages, silent by default.
+	$TAB-e Outputs environment variables.
+	$TAB-f file Sets the configuration file, default will read $(readlink -e $PWD/$CONF_DIR)/*.conf;
+	$TAB-i secs Creates systemd timer service files for the interval supplied.
+
+	Variables: (Prefix = conf property, $ is function, property otherwise)
+	EOF
+}
+
+install () {
+	local _INTERVAL=$1
+
+	cat > /etc/systemd/system/xyzmonitor.service <<-EOF
+	[Unit]
+	Description="xyzmonitor is a server monitoring tool."
+	
+	[Service]
+	ExecStart=/usr/local/bin/xyzmonitor
+	EOF
+
+	cat > /etc/systemd/system/xyzmonitor.timer <<-EOF
+	[Unit]
+	Description="Run xyzmonitor periodically"
+	
+	[Timer]
+	OnBootSec=$_INTERVAL
+	OnUnitActiveSec=$_INTERVAL
+	Unit=xyzmonitor.service
+
+	[Install]
+	WantedBy=multi-user.target
+	EOF
+
+	echo "Run: systemctl enable xyzmonitor.timer; systemctl start xyzmonitor.timer;"
+}
+
+while getopts "hvei:f:" OPT; do
+	case "$OPT" in
+		h)
+			help
+			HELP=1
+			;;
+		v)
+			debug "verbose $V"
+			let V+=1
+			;;
+		e)
+			debug "enable PRINTENV"
+			PRINTENV=1
+			;;
+		i)
+			_MATCH_NUMBER='^[0-9]+$'
+			if ! [[ $OPTARG =~ $_MATCH_NUMBER ]]; then
+				error "Option -i requires a valid number.";
+				exit 1;
+			fi
+			install $OPTARG
+			exit 1;
+			;;
+		f)
+			CONFS=$OPTARG
+			;;
+		*)
+			exit 1;
+	esac
+done
+
+for XYZ_DIR in ${XYZ_DIRS[@]}; do
+	if [[ -d $XYZ_DIR ]]; then
+		for XYZ_FILE in $XYZ_DIR/*.bash; do
+			load "$XYZ_FILE"
+		done
+	fi
+done
+unset XYZ_DIR
+unset XYZ_FILE
+
+if [[ $HELP -gt 0 ]]; then
+	exit 0;
+fi
+
+for CONF_FILE in $CONF_DIR/*.conf; do
+	config "$CONF_FILE"
+	for CALL_NAME in ${CALLS[@]}; do
+		call "$CALL_NAME"
+	done
+done;
+

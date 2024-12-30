@@ -1,0 +1,12 @@
+Source: xyzmonitor
+Section: devel
+Priority: optional
+Maintainer: Diogo Casado <email@diogocasado.com>
+Build-Depends: debhelper (>= 9)
+
+Package: xyzmonitor
+Architecture: all
+Depends: bash
+Description: xyzmonitor
+ xyzmonitor is collection of scripts to publish server
+ stats to communication tools.

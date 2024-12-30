@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+
+clean:
+	@# Nada
+
+build:
+	@# Nada
+
+binary:
+	mkdir -p debian/xyzmonitor/usr/local/sbin
+	mkdir -p debian/xyzmonitor/usr/local/etc/xyzmonitor/xyz.d
+	mkdir -p debian/xyzmonitor/etc/xyzmonitor/conf.d
+	cp xyzmonitor debian/xyzmonitor/usr/local/sbin
+	cp xyz.d/* debian/xyzmonitor/usr/local/etc/xyzmonitor/xyz.d
+	cp conf.d/* debian/xyzmonitor/etc/xyzmonitor/conf.d
+	dh_gencontrol
+	dh_builddeb
+	cp debian/conffiles debian/xyzmonitor/DEBIAN
