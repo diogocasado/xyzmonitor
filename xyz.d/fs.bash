@@ -1,6 +1,6 @@
 
 fs_init () {
-	FS_PATHS=("/var/log")
+	FS_PATHS=()
 
 	xyzcfg FS_PATHS "Mount point paths"
 	xyzenv FS_SIZE "Sizes for each fs path"

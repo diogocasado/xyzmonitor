@@ -14,4 +14,3 @@ Network    |Ipv4|Rx|Tx
 $(NET_LIST)
 Ping       |Host
 $(PING_LIST)
-* ${PING_TIMES[0]}|${PING_HOSTS[0]}

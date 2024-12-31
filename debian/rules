@@ -15,4 +15,4 @@ binary:
 	cp conf.d/* debian/xyzmonitor/etc/xyzmonitor/conf.d
 	dh_gencontrol
 	dh_builddeb
-	cp debian/conffiles debian/xyzmonitor/DEBIAN
+

@@ -1,2 +1,2 @@
-/etc/xyzmonitor/default.conf
-/etc/xyzmonitor/template
+/etc/xyzmonitor/conf.d/default.conf
+/etc/xyzmonitor/conf.d/template

@@ -256,19 +256,19 @@ call () {
 
 	trace "pass $_CALL_NAME"
 
-	if [[ $_CALL_NAME == "printenv" && $PRINTENV -gt 0 ]]; then
+	if [[ $_CALL_NAME == "print" && $PRINTENV -gt 0 ]]; then
 		call_printenv
 		return
 	fi
 
 	for XYZ_NAME in ${XYZS[@]}; do
 		if func_exists "${XYZ_NAME}_invoke"; then
-			trace "call invoke ${_CALL_NAME}"
+			trace "[$XYZ_NAME] call invoke ${_CALL_NAME}"
 			"${XYZ_NAME}_invoke" "$_CALL_NAME"
 		fi
 		local _XYZ_FUNC="${XYZ_NAME}_${_CALL_NAME}"
 		if func_exists $_XYZ_FUNC; then
-			trace "call ${_CALL_NAME}"
+			trace "[$XYZ_NAME] call ${_CALL_NAME}"
 			$_XYZ_FUNC
 		fi
 	done
@@ -279,23 +279,25 @@ call () {
 call_printenv () {
 	local _VAR
 	for _VAR in ${XYZENVS[@]}; do
-		local -n _VALUE="$_VAR"
-		local _TYPE=$(declare -p $_VAR)
-		case "${_TYPE#declare -}" in
-			a*)
-				printf "%s=(" "$_VAR"
-				local _SEP=
-				local _ITEM
-				for _ITEM in "${_VALUE[@]}"; do
-					printf "%s\"%s\"" "$_SEP" "$_ITEM"
-					_SEP=","
-				done
-				printf ")\n"
-				;;
-			*)
-				printf "%s=\"%s\"\n" "$_VAR" "${_VALUE}"
-				;;
-		esac
+		if ! [[ "$_VAR" =~ ^\$ ]]; then
+			local -n _VALUE="$_VAR"
+			local _TYPE=$(declare -p $_VAR)
+			case "${_TYPE#declare -}" in
+				a*)
+					printf "%s=(" "$_VAR"
+					local _SEP=
+					local _ITEM
+					for _ITEM in "${_VALUE[@]}"; do
+						printf "%s\"%s\"" "$_SEP" "$_ITEM"
+						_SEP=","
+					done
+					printf ")\n"
+					;;
+				*)
+					printf "%s=\"%s\"\n" "$_VAR" "${_VALUE}"
+					;;
+			esac
+		fi
 	done;
 }
 
