@@ -1,7 +1,29 @@
 
 # xyzmonitor
 
-A simple tool to monitor Linux server machines.
+A simple customizable tool to monitor Linux server machines.
+
+Sample output:
+
+```
+Hostname     my.server.com                            
+Logins       Ip                                     
+* root       1.2.3.4                         
+Uptime       up 8 weeks, 3 days, 52 minutes         
+Kernel       5.15.0-124-generic                     
+Load         0.00 0.00 0.00                         
+Memory       79.2% of 2.0GB                         
+Storage      Use                             Avail  Size
+* /          17% (7.9G)                      41G    49G
+* /var/log   2.8G                                   
+Process      Cpu                             Mem    
+* sshd       0.0%                            0.4%   
+* nginx      0.0%                            1.7%   
+Network      Ipv4                            Rx     Tx
+* eth0       1.2.3.4                         4Kbps  4Kbps
+Ping         Host                                   
+* 19.8ms     github.com
+```
 
 ## Usage
 
