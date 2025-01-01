@@ -105,7 +105,7 @@ The packaged can be installed using:
 gdebi -n package.deb
 ```
 
-## What to contribute?
+## Want to contribute?
 
 Great! Send pull requests.
 
